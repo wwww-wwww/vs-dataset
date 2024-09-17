@@ -88,9 +88,8 @@ def text(im: Image, n, rx=7, ry=7):
   return im
 
 
-def color(clip: vs.VideoNode, seed: int):
-  rgb = clip.format.color_family == vs.ColorFamily.RGB
-  if rgb:
+def color(clip: vs.VideoNode, seed: int, perchannel: bool = True):
+  if perchannel and clip.format.color_family == vs.ColorFamily.RGB:
     planes = core.std.SplitPlanes(clip)
     for p in range(len(planes)):
       gam = 0.75 + 0.5 * rand("gam", seed, p)
@@ -143,8 +142,9 @@ def invert(clip: vs.VideoNode, fn: int):
 #apply to lq, gt, mask
 def zoom(clip: vs.VideoNode, fn: int, n: int, ww: int, hh: int):
   if fn % 5 == 0:
+    ratio = ww / hh
     height = randrange(720, 900, "zoom", n)
-    width = round(height * (16 / 9))
+    width = round(height * ratio)
     clip = core.std.CropAbs(clip,
                             width,
                             height,
