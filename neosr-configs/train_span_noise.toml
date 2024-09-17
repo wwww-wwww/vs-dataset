@@ -1,0 +1,106 @@
+
+name = "train_span_noise"
+model_type = "image"
+scale = 1
+#use_amp = true
+#bfloat16 = true
+fast_matmul = true
+#compile = true
+#manual_seed = 1024
+
+[datasets.train]
+type = "paired"
+dataroot_gt = 'F:/ai/data/noisep/gt/'
+dataroot_lq = 'F:/ai/data/noisep/lq/'
+patch_size = 128
+batch_size = 16
+dataset_enlarge_ratio = 1
+auto_components = true
+use_hflip = true
+use_rot = true
+
+[datasets.val]
+name = "val"
+type = "paired"
+dataroot_gt = 'F:/ai/data/noisep/val/gt/'
+dataroot_lq = 'F:/ai/data/noisep/val/lq/'
+
+[val]
+val_freq = 2000
+save_img = true
+[val.metrics.psnr]
+type = "calculate_psnr"
+[val.metrics.ssim]
+type = "calculate_ssim"
+
+[logger]
+total_iter = 862000
+save_checkpoint_freq = 2000
+use_tb_logger = true
+#save_tb_img = true
+#print_freq = 100
+
+[network_g]
+type = "span"
+num_in_ch = 3
+num_out_ch = 1
+feature_channels = 48
+
+#[network_d]
+#type = "ea2fpn"
+##num_in_ch = 1
+
+[train]
+ema = 0.999
+
+[train.optim_g]
+type = "adan_sf"
+lr = 5e-3
+betas = [ 0.98, 0.92, 0.987 ]
+weight_decay = 0.02
+schedule_free = true
+
+#[train.optim_d]
+#type = "adan_sf"
+#lr = 3e-4
+#betas = [ 0.98, 0.92, 0.995 ]
+#weight_decay = 0.02
+#schedule_free = true
+
+#  losses
+[train.pixel_opt]
+type = "L1Loss"
+loss_weight = 1.0
+
+[train.mssim_opt]
+type = "mssim_loss"
+loss_weight = 1.0
+
+[train.perceptual_opt]
+type = "vgg_perceptual_loss"
+loss_weight = 0.5
+criterion = "huber"
+
+#[train.gan_opt]
+#type = "gan_loss"
+#gan_type = "bce"
+#loss_weight = 0.01
+
+#[train.color_opt]
+#type = "color_loss"
+#loss_weight = 1.0
+#criterion = "huber"
+
+#[train.luma_opt]
+#type = "luma_loss"
+#loss_weight = 1.0
+#criterion = "huber"
+
+#[train.ldl_opt]
+#type = "ldl_loss"
+#loss_weight = 1.0
+#criterion = "huber"
+
+#[train.dists_opt]
+#type = "dists_loss"
+#loss_weight = 0.5
