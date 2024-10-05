@@ -4,6 +4,7 @@ import random
 import vapoursynth as vs
 from PIL import Image
 import vstools
+from functools import partial
 
 core = vs.core
 
@@ -78,7 +79,7 @@ def np_img_la(frame: vs.VideoFrame, alpha: vs.VideoFrame):
 
 
 def generate_mask(clip, outdir, name, get_base, get_lq, get_gt, extra_np,
-                      extra_vs, extra_with_mask, width, height):
+                  extra_vs, extra_with_mask, width, height):
 
   os.makedirs(f"{outdir}gt", exist_ok=True)
   os.makedirs(f"{outdir}lq", exist_ok=True)
@@ -357,3 +358,68 @@ def generate_paired_3_1(clip1, clip2, outdir, name, get_base, extra_np,
     im_lq.save(out_lq)
     im_gt.save(out_gt)
     print(fn + 1, len(clip1))
+
+
+def generate_paired_n(frames_in, frame_out, outdir, name, get_base, extra_np,
+                      extra_vs, extra_with_mask):
+  os.makedirs(f"{outdir}gt", exist_ok=True)
+  os.makedirs(f"{outdir}lq", exist_ok=True)
+  os.makedirs(f"{outdir}val/gt", exist_ok=True)
+  os.makedirs(f"{outdir}val/lq", exist_ok=True)
+
+  print(0, len(frame_out))
+  for fn in range(len(frame_out)):
+    out = ""
+    if fn == ((len(frame_out) // 2) - 1):
+      out = "val/"
+
+    out_lq = f"{outdir}{out}lq/{name}_{fn:03d}"
+    out_gt = f"{outdir}{out}gt/{name}_{fn:03d}"
+
+    skip = True
+    if not os.path.exists(out_gt):
+      skip = False
+
+    if not os.path.exists(out_lq):
+      skip = False
+
+    if skip:
+      print(fn + 1, len(frame_out))
+      continue
+
+    nn = random.randint(0, 9999)
+
+    lq = [
+        core.std.FrameEval(c, partial(get_base, c, fn, nn)) for c in frames_in
+    ]
+    gt = core.std.FrameEval(frame_out, partial(get_base, frame_out, fn, nn))
+
+    #if extra_np:
+    #  lq = core.resize.Point(lq, format=vs.RGB24)
+    #  gt = core.resize.Point(gt, format=vs.GRAY8)
+
+    #  lq = core.std.ModifyFrame(lq, lq, lambda n, f: extra_np(f, fn, nn))
+    #  gt = core.std.ModifyFrame(gt, gt, lambda n, f: extra_np(f, fn, nn))
+
+    #  lq = core.resize.Point(lq, format=vs.RGBS)
+    #  gt = core.resize.Point(gt, format=vs.GRAYS)
+
+    # lq = extra_vs(lq, fn, nn)
+    # gt = extra_vs(gt, fn, nn)
+
+    # lqout = extra_with_mask(lq, fn, nn)
+    # gtout = extra_with_mask(gt, fn, nn)
+    lq = [
+        core.resize.Point(clip, format=vs.GRAY8, dither_type="error_diffusion")
+        for clip in lq
+    ]
+    gt = core.resize.Point(gt, format=vs.GRAY8, dither_type="error_diffusion")
+
+    np_lq = [np_img_l(clip.get_frame(fn)) for clip in lq]
+    np_lq = np.stack(np_lq, axis=2)
+    np_gt = np_img_l(gt.get_frame(fn))
+
+    np.savez_compressed(out_lq, np_lq)
+    np.savez_compressed(out_gt, np_gt)
+
+    print(fn + 1, len(frame_out))
