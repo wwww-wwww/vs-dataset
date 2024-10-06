@@ -1,6 +1,7 @@
 from util import *
 from PIL import ImageDraw, ImageFont, Image
 from fontTools.ttLib import TTFont
+from functools import partial
 
 fonts = [
     "FOT-TsukuMinPro-B.otf",
@@ -153,3 +154,10 @@ def zoom(clip: vs.VideoNode, fn: int, n: int, ww: int, hh: int):
     clip = core.resize.Bicubic(clip, width=ww, height=hh)
 
   return clip
+
+
+def apply(clip, fn):
+  if type(clip) == list:
+    return [core.std.FrameEval(c, partial(fn, c)) for c in clip]
+  else:
+    return core.std.FrameEval(clip, partial(fn, clip))

@@ -4,9 +4,14 @@ import random
 import vapoursynth as vs
 from PIL import Image
 import vstools
-from functools import partial
 
 core = vs.core
+
+base_seed = random.random()
+
+
+def get_base():
+  return f"{base_seed}-"
 
 
 def source(file, bits=16):
@@ -19,17 +24,17 @@ def randchoice(col, *args):
 
 
 def randint(*args):
-  return abs(hash("-".join([str(c) for c in args])))
+  return abs(hash(get_base() + "-".join([str(c) for c in args])))
 
 
 def randrange(a, b, *args):
-  h = hash("-".join([str(c) for c in args]))
+  h = hash(get_base() + "-".join([str(c) for c in args]))
   h = abs(h) % 100000 / 100000
   return int(a + h * (b - a))
 
 
 def rand(*args):
-  h = hash("-".join([str(c) for c in args]))
+  h = hash(get_base() + "-".join([str(c) for c in args]))
   h = abs(h) % 100000 / 100000
   return h
 
@@ -78,8 +83,8 @@ def np_img_la(frame: vs.VideoFrame, alpha: vs.VideoFrame):
   return np.stack([im, im2], axis=2)
 
 
-def generate_mask(clip, outdir, name, get_base, get_lq, get_gt, extra_np,
-                  extra_vs, extra_with_mask, width, height):
+def generate(clip, outdir, name, get_base, get_lq, get_gt, extra_np, extra_vs,
+             extra_with_mask, width, height):
 
   os.makedirs(f"{outdir}gt", exist_ok=True)
   os.makedirs(f"{outdir}lq", exist_ok=True)
@@ -198,7 +203,7 @@ def generate_paired_3_3_mask(srclq,
     if max_ssimu2 < 100:
       score = ssim.get_frame(fn).props["_SSIMULACRA2"]
       if score > max_ssimu2: continue
-      if score < 40: continue
+      if score < 50: continue
 
     out = ""
     if fn == ((len(srclq) // 2) - 1):
@@ -250,7 +255,7 @@ def generate_paired_3_3_mask(srclq,
     lq = extra_vs(lq, fn, nn)
     gt = extra_vs(gt, fn, nn)
 
-    #lq, _mask = gt_lq_mask(lq, gt) # mix gt in lq
+    lq, _mask = gt_lq_mask(lq, gt)  # mix gt in lq
     gt, mask = gt_lq_mask(lq, gt)
 
     lqout = extra_with_mask(lq, fn, nn)
@@ -360,39 +365,36 @@ def generate_paired_3_1(clip1, clip2, outdir, name, get_base, extra_np,
     print(fn + 1, len(clip1))
 
 
-def generate_paired_n(frames_in, frame_out, outdir, name, get_base, extra_np,
-                      extra_vs, extra_with_mask):
+def generate_paired_n(frames_in, frames_out, outdir, name):
   os.makedirs(f"{outdir}gt", exist_ok=True)
   os.makedirs(f"{outdir}lq", exist_ok=True)
   os.makedirs(f"{outdir}val/gt", exist_ok=True)
   os.makedirs(f"{outdir}val/lq", exist_ok=True)
 
-  print(0, len(frame_out))
-  for fn in range(len(frame_out)):
+  if type(frames_out) == list:
+    num_frames = len(frames_out[0])
+  else:
+    num_frames = len(frames_out)
+
+  print(0, num_frames)
+  for fn in range(num_frames):
     out = ""
-    if fn == ((len(frame_out) // 2) - 1):
+    if fn == ((num_frames // 2) - 1):
       out = "val/"
 
     out_lq = f"{outdir}{out}lq/{name}_{fn:03d}"
     out_gt = f"{outdir}{out}gt/{name}_{fn:03d}"
 
     skip = True
-    if not os.path.exists(out_gt):
+    if not os.path.exists(out_gt + ".npz"):
       skip = False
 
-    if not os.path.exists(out_lq):
+    if not os.path.exists(out_lq + ".npz"):
       skip = False
 
     if skip:
-      print(fn + 1, len(frame_out))
+      print(fn + 1, num_frames)
       continue
-
-    nn = random.randint(0, 9999)
-
-    lq = [
-        core.std.FrameEval(c, partial(get_base, c, fn, nn)) for c in frames_in
-    ]
-    gt = core.std.FrameEval(frame_out, partial(get_base, frame_out, fn, nn))
 
     #if extra_np:
     #  lq = core.resize.Point(lq, format=vs.RGB24)
@@ -409,17 +411,24 @@ def generate_paired_n(frames_in, frame_out, outdir, name, get_base, extra_np,
 
     # lqout = extra_with_mask(lq, fn, nn)
     # gtout = extra_with_mask(gt, fn, nn)
+
     lq = [
         core.resize.Point(clip, format=vs.GRAY8, dither_type="error_diffusion")
-        for clip in lq
+        for clip in frames_in
     ]
-    gt = core.resize.Point(gt, format=vs.GRAY8, dither_type="error_diffusion")
+
+    gt = [
+        core.resize.Point(clip, format=vs.GRAY8, dither_type="error_diffusion")
+        for clip in frames_out
+    ]
 
     np_lq = [np_img_l(clip.get_frame(fn)) for clip in lq]
     np_lq = np.stack(np_lq, axis=2)
-    np_gt = np_img_l(gt.get_frame(fn))
+
+    np_gt = [np_img_l(clip.get_frame(fn)) for clip in gt]
+    np_gt = np.stack(np_gt, axis=2)
 
     np.savez_compressed(out_lq, np_lq)
     np.savez_compressed(out_gt, np_gt)
 
-    print(fn + 1, len(frame_out))
+    print(fn + 1, num_frames)
