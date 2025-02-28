@@ -4,18 +4,18 @@ from fontTools.ttLib import TTFont
 from functools import partial
 
 fonts = [
-    "FOT-TsukuMinPro-B.otf",
-    "FOT-TsukuGoPro-H.otf",
-    "FOT-TsukuARdGothicStd-M.otf",
-    "FOT-TsukuAOldMinPr6N-L.otf",
-    "FOT-TsukuAOldMinPr6N-L.otf",
-    "FOT-TsukuAOldMinPr6N-L.otf",
+    "fonts/FOT-TsukuMinPro-B.otf",
+    "fonts/FOT-TsukuGoPro-H.otf",
+    "fonts/FOT-TsukuARdGothicStd-M.otf",
+    "fonts/FOT-TsukuAOldMinPr6N-L.otf",
+    "fonts/FOT-TsukuAOldMinPr6N-L.otf",
+    "fonts/FOT-TsukuAOldMinPr6N-L.otf",
 ]
 fonts = [
     ImageFont.truetype(font, size) for font in fonts for size in range(40, 80)
 ]
 
-tfont = TTFont("FOT-TsukuMinPro-B.otf")
+tfont = TTFont("fonts/FOT-TsukuMinPro-B.otf")
 
 
 def get_glyphs(font):
@@ -37,7 +37,7 @@ def get_random_text(alph, length, seed):
   return "".join(chars)
 
 
-def text(im: Image, n, rx=7, ry=7):
+def text(im: Image, n, rx=4, ry=4):
   canvas = Image.new("LA", (im.width * 2, im.height * 2), (0, 0))
   draw = ImageDraw.Draw(canvas)
   px = canvas.width // rx
@@ -89,32 +89,35 @@ def text(im: Image, n, rx=7, ry=7):
   return im
 
 
-def color(clip: vs.VideoNode, seed: int, perchannel: bool = True):
-  if perchannel and clip.format.color_family == vs.ColorFamily.RGB:
-    planes = core.std.SplitPlanes(clip)
-    for p in range(len(planes)):
-      gam = 0.75 + 0.5 * rand("gam", seed, p)
-      mul = 0.75 + 0.5 * rand("mul", seed, p)
-      off = -0.25 + 0.5 * rand("off", seed, p)
-      planes[p] = core.std.Expr([planes[p]], f"x {gam} pow {mul} * {off} +")
-    clip = core.std.ShufflePlanes(planes, [0, 0, 0], vs.RGB)
-  else:
-    gam = 0.75 + 0.5 * rand("gam", seed)
-    mul = 0.75 + 0.5 * rand("mul", seed)
-    off = -0.25 + 0.5 * rand("off", seed)
-    clip = core.std.Expr([clip], f"x {gam} pow {mul} * {off} +")
+def lum(clip: vs.VideoNode, *seed):
+  gam = 0.75 + 0.5 * rand("gam", *seed)
+  mul = 0.75 + 0.5 * rand("mul", *seed)
+  off = -0.25 + 0.5 * rand("off", *seed)
+  clip = core.std.Expr([clip], f"x {gam} pow {mul} * {off} +")
+  return clip
+
+
+def color(clip: vs.VideoNode, *seed):
+  planes = core.std.SplitPlanes(clip)
+  for p in range(len(planes)):
+    gam = 0.75 + 0.5 * rand("gam", p, *seed)
+    mul = 0.75 + 0.5 * rand("mul", p, *seed)
+    off = -0.25 + 0.5 * rand("off", p, *seed)
+    planes[p] = core.std.Expr([planes[p]], f"x {gam} pow {mul} * {off} +")
+  clip = core.std.ShufflePlanes(planes, [0, 0, 0], clip.format.color_family)
   return clip
 
 
 def noise(clip: vs.VideoNode, seed: str, strength: int = 6):
   rgb = clip.format.color_family == vs.ColorFamily.RGB
+  yuv = clip.format.color_family == vs.ColorFamily.YUV
   if rgb:
     clip = core.resize.Bicubic(clip, format=vs.YUV444P16, matrix_s="709")
-  else:
+  elif not yuv:
     clip = core.resize.Bicubic(clip, format=vs.GRAY16)
 
   noise_str = strength * rand("base noise strength", seed)**3
-  noise_xsize = 2 + 14 * rand("base noise xsize", seed)
+  noise_xsize = 1 + 10 * rand("base noise xsize", seed)
   noise_ysize = 0.9 + 0.2 * rand("base noise ysize", seed)
   noise_seed = randint("base noise seed", seed)
 
@@ -128,7 +131,7 @@ def noise(clip: vs.VideoNode, seed: str, strength: int = 6):
 
   if rgb:
     clip = core.resize.Bicubic(clip, format=vs.RGBS, matrix_in_s="709")
-  else:
+  elif not yuv:
     clip = core.resize.Bicubic(clip, format=vs.GRAYS)
 
   return clip

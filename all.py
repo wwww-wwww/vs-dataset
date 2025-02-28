@@ -5,22 +5,20 @@ from rich.progress import Progress, BarColumn, TimeElapsedColumn, TimeRemainingC
 import hashlib
 
 script = "gray_generate.py"
+FROM = "video/clean"
+TO = "video/clean"
 
 if __name__ == "__main__":
-  files = os.listdir("src")
+  files = os.listdir(FROM)
   files = [f for f in files if f.endswith(".mp4") or f.endswith(".mkv")]
-
-  files = [(os.path.join("src", f), "") for f in files]
-
-  #files = [(os.path.join("src", f), os.path.join("gt", f)) for f in files]
-
+  files = [(os.path.join(FROM, f), os.path.join(TO, f)) for f in files]
 
   def do(a, b, total, progress):
-    n = os.path.basename(a)
-    n = n[:2] + n[-6:-4] + hashlib.md5(n.encode("utf-8")).hexdigest()
-    t = progress.add_task(n, total=1000)
+    c = os.path.basename(a)
+    c = c[:2] + c[-6:-4] + hashlib.md5(c.encode("utf-8")).hexdigest()
+    t = progress.add_task(c, total=1000)
 
-    cmd = ["python", "-u", script, n, a, b]
+    cmd = ["python", "-u", script, a, b, c]
     #print(" ".join(cmd))
     p = subprocess.Popen(cmd,
                          stdout=subprocess.PIPE,
